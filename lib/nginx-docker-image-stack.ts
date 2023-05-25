@@ -12,12 +12,12 @@ export class NginxDockerImageStack extends Stack {
     super(scope, id, props);
 
     // Docker image for Nautobot
-    const nautobotImage = new DockerImageAsset(this, 'NginxImage', {
+    const nginxImage = new DockerImageAsset(this, 'NginxImage', {
       directory: './lib/nginx',  // the directory containing the Dockerfile
     });
 
     // Assign the ECR repository and Docker image name to the class properties
-    this.repository = nautobotImage.repository;
-    this.imageName = nautobotImage.imageUri;
+    this.repository = nginxImage.repository;
+    this.imageName = nginxImage.imageUri;
   }
 }
