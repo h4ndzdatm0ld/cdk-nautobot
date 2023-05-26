@@ -69,7 +69,7 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     const nginxContainer = nginxTaskDefinition.addContainer('nginx', {
-      image: ContainerImage.fromEcrRepository(nginxStack.repository, nginxStack.imageName),
+      image: ContainerImage.fromDockerImageAsset(nginxStack.image),
       logging: LogDrivers.awsLogs({ streamPrefix: 'Nginx' }),
     });
 
@@ -88,6 +88,79 @@ export class NautobotFargateEcsStack extends Stack {
       },
     });
 
+    // Nautobot Worker
+    const nautobotWorkerTaskDefinition = new FargateTaskDefinition(this, 'NautobotWorkerTaskDefinition', {
+      memoryLimitMiB: 4096,
+      cpu: 2048,
+    });
+
+    const nautobotWorkerContainer = nautobotWorkerTaskDefinition.addContainer('nautobot-worker', {
+      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+      logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotWorker' }),
+      environment: {
+        'DATABASE_URL': nautobotPostgresInstance.dbInstanceEndpointAddress,
+        'REDIS_URL': nautobotRedisCluster.attrRedisEndpointAddress,
+      },
+      environmentFiles: [
+        EnvironmentFile.fromBucket(s3Stack.bucket, '.env'),
+      ],
+      command: [
+        'nautobot-server',
+        'celery',
+        'worker',
+      ],
+      healthCheck: {
+        command: ['CMD', 'bash', '-c', 'nautobot-server celery inspect ping --destination celery@$HOSTNAME'],
+        interval: Duration.seconds(30),
+        timeout: Duration.seconds(10),
+        startPeriod: Duration.seconds(60),
+        retries: 5,
+      }
+    });
+
+    const workerService = new FargateService(this, 'WorkerService', {
+      cluster,
+      taskDefinition: nautobotWorkerTaskDefinition,
+      assignPublicIp: false,
+      desiredCount: 2,
+      vpcSubnets: {
+        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
+    });
+
+    // Nautobot Scheduler Task Definition and Service
+    const nautobotSchedulerTaskDefinition = new FargateTaskDefinition(this, 'NautobotSchedulerTaskDefinition', {
+      memoryLimitMiB: 4096,
+      cpu: 2048,
+    });
+
+    const nautobotSchedulerContainer = nautobotSchedulerTaskDefinition.addContainer('nautobot-scheduler', {
+      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+      logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotScheduler' }),
+      environment: {
+        'DATABASE_URL': nautobotPostgresInstance.dbInstanceEndpointAddress,
+        'REDIS_URL': nautobotRedisCluster.attrRedisEndpointAddress,
+      },
+      environmentFiles: [
+        EnvironmentFile.fromBucket(s3Stack.bucket, '.env'),
+      ],
+      command: [
+        'nautobot-server',
+        'celery',
+        'beat',
+      ],
+    });
+
+    const schedulerService = new FargateService(this, 'SchedulerService', {
+      cluster,
+      taskDefinition: nautobotSchedulerTaskDefinition,
+      assignPublicIp: false,
+      desiredCount: 1, // Generally, there should be only one scheduler instance running
+      vpcSubnets: {
+        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
+    });
+
     // Nautobot App Task Definition and Service
     const nautobotAppTaskDefinition = new FargateTaskDefinition(this, 'NautobotAppTaskDefinition', {
       memoryLimitMiB: 4096,
@@ -95,12 +168,12 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     const nautobotAppContainer = nautobotAppTaskDefinition.addContainer('nautobot', {
-      image: ContainerImage.fromEcrRepository(dockerStack.repository, dockerStack.imageName),
+      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
       logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotApp' }),
       environment: {
         // Make sure to pass the database and Redis information to the Nautobot app.
-        'DATABASE_URL': nautobotPostgresInstance.dbInstanceEndpointAddress,
-        'REDIS_URL': nautobotRedisCluster.attrRedisEndpointAddress,
+        'NAUTOBOT_DB_HOST': nautobotPostgresInstance.dbInstanceEndpointAddress,
+        'NAUTOBOT_REDIS_HOST': nautobotRedisCluster.attrRedisEndpointAddress,
       },
       // Can replace/use AWS Secrets Manager to store sensitive information.
       //https://docs.aws.amazon.com/cdk/api/v1/docs/@aws-cdk_aws-ecs.EnvironmentFile.html

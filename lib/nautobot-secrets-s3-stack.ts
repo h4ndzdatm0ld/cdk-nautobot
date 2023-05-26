@@ -21,7 +21,7 @@ export class NautobotSecretsS3Stack extends Stack {
     // Create S3 bucket with server-side encryption using KMS key
     const bucket = new s3.Bucket(this, 'EnvBucket', {
       encryption: s3.BucketEncryption.KMS,
-      bucketName: 'nautobot-env',
+      bucketName: 'nautobotenv',
       encryptionKey: key,
       versioned: true,
     });
@@ -32,6 +32,7 @@ export class NautobotSecretsS3Stack extends Stack {
     if (!fs.existsSync(envFilePath)) {
       throw new Error('.env file not found');
     }
+
     // Deploy .env file to S3 bucket
     new s3deploy.BucketDeployment(this, 'DeployEnvFile', {
       sources: [s3deploy.Source.asset(path.dirname(envFilePath), {
@@ -39,5 +40,8 @@ export class NautobotSecretsS3Stack extends Stack {
       })],
       destinationBucket: bucket,
     });
+
+    // Define public readonly property to access bucket from other stacks
+    this.bucket = bucket
   };
 }
