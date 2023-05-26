@@ -1,57 +1,19 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
-import { Vpc, SubnetType, SecurityGroup, Peer, Port } from 'aws-cdk-lib/aws-ec2';
-import { Cluster, ContainerImage, FargateTaskDefinition, LogDrivers, FargateService, Protocol, EnvironmentFile } from 'aws-cdk-lib/aws-ecs';
+import { SubnetType, SecurityGroup, Peer, Port } from 'aws-cdk-lib/aws-ec2';
+import { Cluster, ContainerImage, FargateTaskDefinition, LogDrivers, FargateService, Protocol } from 'aws-cdk-lib/aws-ecs';
 import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { Construct } from 'constructs';
 import { NautobotDockerImageStack } from './nautobot-docker-image-stack';
 import { NginxDockerImageStack } from './nginx-docker-image-stack';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import { NautobotSecretsS3Stack } from './nautobot-secrets-s3-stack';
-
-
+import { NautobotVpcStack } from './nautobot-vpc-stack';
+import { NautobotDbStack } from './nautobot-db-stack';
 
 export class NautobotFargateEcsStack extends Stack {
-  constructor(scope: Construct, id: string, dockerStack: NautobotDockerImageStack, nginxStack: NginxDockerImageStack, s3Stack: NautobotSecretsS3Stack, props?: StackProps) {
+  constructor(scope: Construct, id: string, dockerStack: NautobotDockerImageStack, nginxStack: NginxDockerImageStack, s3Stack: NautobotSecretsS3Stack, vpcStack: NautobotVpcStack, dbStack: NautobotDbStack, props?: StackProps) {
     super(scope, id, props);
 
-    const vpc = new Vpc(this, 'NautobotVPC', {
-      maxAzs: 3,
-    });
-
-    // Create an Amazon RDS PostgreSQL database instance
-    const nautobotPostgresInstance = new rds.DatabaseInstance(this, 'NautobotPostgres', {
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_13_4,
-      }),
-      credentials: rds.Credentials.fromGeneratedSecret('admin'), // admin username with a generated secret
-      vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T2, ec2.InstanceSize.MICRO),
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      multiAz: true,
-      allocatedStorage: 25, // 25GB
-      storageType: rds.StorageType.GP2,
-      deletionProtection: false,
-    });
-
-    // Create an Amazon ElastiCache Redis cluster
-    const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'MyCacheSubnetGroup', {
-      description: 'Subnet group for Redis cluster',
-      subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
-    });
-
-    const nautobotRedisCluster = new elasticache.CfnCacheCluster(this, 'NautobotRedis', {
-      cacheNodeType: 'cache.t2.micro',
-      engine: 'redis',
-      numCacheNodes: 1,
-      autoMinorVersionUpgrade: true,
-      cacheSubnetGroupName: cacheSubnetGroup.ref,
-      // vpcSecurityGroupIds: [securityGroup.securityGroupId],
-    });
-
+    const vpc = vpcStack.vpc;
 
     const cluster = new Cluster(this, 'NautobotCluster', {
       vpc,
@@ -98,12 +60,10 @@ export class NautobotFargateEcsStack extends Stack {
       image: ContainerImage.fromDockerImageAsset(dockerStack.image),
       logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotWorker' }),
       environment: {
-        'DATABASE_URL': nautobotPostgresInstance.dbInstanceEndpointAddress,
-        'REDIS_URL': nautobotRedisCluster.attrRedisEndpointAddress,
+        // Make sure to pass the database and Redis information to the Nautobot app.
+        'NAUTOBOT_DB_HOST': dbStack.postgresInstance.dbInstanceEndpointAddress,
+        'NAUTOBOT_REDIS_HOST': dbStack.redisCluster.attrRedisEndpointAddress,
       },
-      environmentFiles: [
-        EnvironmentFile.fromBucket(s3Stack.bucket, '.env'),
-      ],
       command: [
         'nautobot-server',
         'celery',
@@ -138,12 +98,10 @@ export class NautobotFargateEcsStack extends Stack {
       image: ContainerImage.fromDockerImageAsset(dockerStack.image),
       logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotScheduler' }),
       environment: {
-        'DATABASE_URL': nautobotPostgresInstance.dbInstanceEndpointAddress,
-        'REDIS_URL': nautobotRedisCluster.attrRedisEndpointAddress,
+        // Make sure to pass the database and Redis information to the Nautobot app.
+        'NAUTOBOT_DB_HOST': dbStack.postgresInstance.dbInstanceEndpointAddress,
+        'NAUTOBOT_REDIS_HOST': dbStack.redisCluster.attrRedisEndpointAddress,
       },
-      environmentFiles: [
-        EnvironmentFile.fromBucket(s3Stack.bucket, '.env'),
-      ],
       command: [
         'nautobot-server',
         'celery',
@@ -172,14 +130,11 @@ export class NautobotFargateEcsStack extends Stack {
       logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotApp' }),
       environment: {
         // Make sure to pass the database and Redis information to the Nautobot app.
-        'NAUTOBOT_DB_HOST': nautobotPostgresInstance.dbInstanceEndpointAddress,
-        'NAUTOBOT_REDIS_HOST': nautobotRedisCluster.attrRedisEndpointAddress,
+        'NAUTOBOT_DB_HOST': dbStack.postgresInstance.dbInstanceEndpointAddress,
+        'NAUTOBOT_REDIS_HOST': dbStack.redisCluster.attrRedisEndpointAddress,
       },
       // Can replace/use AWS Secrets Manager to store sensitive information.
       //https://docs.aws.amazon.com/cdk/api/v1/docs/@aws-cdk_aws-ecs.EnvironmentFile.html
-      environmentFiles: [
-        EnvironmentFile.fromBucket(s3Stack.bucket, '.env'),
-      ],
       healthCheck: {
         command: ['CMD-SHELL', 'curl -f http://localhost/health || exit 1'],
         interval: Duration.seconds(30),
