@@ -1,6 +1,8 @@
-# Welcome to your CDK TypeScript project
+# Nautobot AWS CDK Deployment
 
-This is a blank project for CDK development with TypeScript.
+This project contains the AWS CDK code to deploy Nautobot to AWS. The CDK code was largely developed by following the [Nautobot In AWS Fargate](https://blog.networktocode.com/post/nautobot-in-aws-fargate/) blog post by [Network to Code](https://www.networktocode.com/).
+
+![Nautobot Architechture](./images/architecture-diagram.png)
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
