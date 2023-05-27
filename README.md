@@ -15,14 +15,31 @@ The `cdk.json` file tells the CDK Toolkit how to execute your app.
 * `cdk diff`        compare deployed stack with current state
 * `cdk synth`       emits the synthesized CloudFormation template
 
-## Structure
+# Project Structure
 
-- `bin/app.ts`: This is the entry point for the application. Here you will import and instantiate all of your CDK Stacks.
-- `lib/`: This directory contains all of your CDK Stack files. For instance:
-- `nautobot-database-stack.ts`: Sets up the Amazon RDS for PostgreSQL and Amazon ElastiCache for Redis.
-- `nautobot-ecs-stack.ts`: Sets up the ECS Fargate service for Nautobot.
-- `nautobot-loadbalancer-stack.ts`: Sets up the load balancer and NGINX container.
-- `nautobot-docker-image-stack.ts`: Builds a Docker image from a local Dockerfile for the main Nautobot container.
-- `nautobot/`: This directory contains your Nautobot Dockerfile and any other necessary files to build the Docker image.
-- `cdk.json`: Contains configuration values for the CDK CLI.
-- `package.json`: Defines the dependencies for your project.
+This project is structured to use AWS CDK to build and deploy a Nautobot application using ECS Fargate, with its data stored in RDS PostgreSQL and cached in ElastiCache Redis.
+
+## File Descriptions
+
+The following files and directories represent the core components of the application:
+
+- `nautobot-app`: This directory contains the Dockerfile and other necessary files to build the Docker image for the main Nautobot application.
+  - `Dockerfile`: Describes the Docker image for the Nautobot application.
+  - `nautobot_config.py`: The configuration file for Nautobot.
+  - `requirements.txt`: Lists the Python dependencies for the Nautobot application.
+  - `README.md`: Describes the contents of the `nautobot-app` directory.
+- `nautobot-db-stack.ts`: Defines the AWS CDK Stack to set up the Amazon RDS for PostgreSQL database and Amazon ElastiCache for Redis cache.
+- `nautobot-docker-image-stack.ts`: Defines the AWS CDK Stack to build the Docker image from the local Dockerfile for the main Nautobot container.
+- `nautobot-fargate-ecs-stack.ts`: Defines the AWS CDK Stack to set up the ECS Fargate service for the Nautobot application.
+- `nautobot-secrets-stack.ts`: Defines the AWS CDK Stack to manage AWS Secrets Manager secrets for the Nautobot application.
+- `nautobot-vpc-stack.ts`: Defines the AWS CDK Stack to set up the VPC for the Nautobot application.
+- `nginx`: This directory contains the Dockerfile and configuration file for the NGINX server.
+  - `Dockerfile`: Describes the Docker image for the NGINX server.
+  - `nginx.conf`: The configuration file for the NGINX server.
+- `nginx-docker-image-stack.ts`: Defines the AWS CDK Stack to build the Docker image from the local Dockerfile for the NGINX server.
+- `secrets`: This directory contains an example environment file.
+  - `env-example`: An example of the environment variables to be used in the application.
+
+## How to Run
+
+// TODO: Add instructions on how to run the project.

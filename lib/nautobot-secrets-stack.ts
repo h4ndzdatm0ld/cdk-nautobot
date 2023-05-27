@@ -4,9 +4,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as dotenv from 'dotenv';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
 
-
-export class NautobotSecretsS3Stack extends Stack {
+export class NautobotSecretsStack extends Stack {
+  public readonly secrets: { [key: string]: ecs.Secret } = {};
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
@@ -27,13 +28,15 @@ export class NautobotSecretsS3Stack extends Stack {
         // Check that the value exists and isn't undefined
         if (value && value !== 'undefined') {
           // Create a new secret in Secrets Manager for this environment variable
-          new secretsmanager.Secret(this, key, {
+          const secret = new secretsmanager.Secret(this, key, {
             secretName: key,
             generateSecretString: {
-              secretStringTemplate: JSON.stringify({ key: value }),
+              secretStringTemplate: JSON.stringify({ value: value }),
               generateStringKey: 'password',
             },
           });
+          // Add the secret to the secrets object
+          this.secrets[key] = ecs.Secret.fromSecretsManager(secret, 'value');
         }
       }
     } else {

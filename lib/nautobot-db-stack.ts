@@ -10,12 +10,14 @@ import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 export class NautobotDbStack extends Stack {
   public readonly postgresInstance: rds.DatabaseInstance;
   public readonly redisCluster: elasticache.CfnCacheCluster;
+  public readonly nautobotDbPassword: Secret;
+
   constructor(scope: Construct, id: string, vpcStack: NautobotVpcStack, props?: StackProps) {
     super(scope, id, props);
 
     const vpc = vpcStack.vpc;
     const instanceType = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO)
-    const nautobotUserSecret = new Secret(this, "NautobotDbPassword", {
+    this.nautobotDbPassword = new Secret(this, "NautobotDbPassword", {
       secretName: "NautobotDbPassword",
       description: "Nautobot DB password",
       generateSecretString: {
@@ -41,7 +43,7 @@ export class NautobotDbStack extends Stack {
         version: rds.PostgresEngineVersion.VER_13_7,
       }),
       instanceType: instanceType,
-      credentials: rds.Credentials.fromSecret(nautobotUserSecret),
+      credentials: rds.Credentials.fromSecret(this.nautobotDbPassword),
       vpc: vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
