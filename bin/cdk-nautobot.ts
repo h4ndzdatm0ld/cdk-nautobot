@@ -4,7 +4,7 @@ import { NautobotVpcStack } from '../lib/nautobot-vpc-stack';
 import { NautobotDockerImageStack } from '../lib/nautobot-docker-image-stack';
 import { NginxDockerImageStack } from '../lib/nginx-docker-image-stack';
 import { NautobotFargateEcsStack } from '../lib/nautobot-fargate-ecs-stack';
-import { NautobotSecretsS3Stack } from '../lib/nautobot-secrets-s3-stack';
+import { NautobotSecretsS3Stack } from '../lib/nautobot-secrets-stack';
 import { NautobotDbStack } from '../lib/nautobot-db-stack';
 
 const app = new cdk.App();

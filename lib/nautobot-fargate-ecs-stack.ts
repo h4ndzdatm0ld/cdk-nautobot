@@ -5,9 +5,14 @@ import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-el
 import { Construct } from 'constructs';
 import { NautobotDockerImageStack } from './nautobot-docker-image-stack';
 import { NginxDockerImageStack } from './nginx-docker-image-stack';
-import { NautobotSecretsS3Stack } from './nautobot-secrets-s3-stack';
+import { NautobotSecretsS3Stack } from './nautobot-secrets-stack';
 import { NautobotVpcStack } from './nautobot-vpc-stack';
 import { NautobotDbStack } from './nautobot-db-stack';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as dotenv from 'dotenv';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
 
 export class NautobotFargateEcsStack extends Stack {
   constructor(scope: Construct, id: string, dockerStack: NautobotDockerImageStack, nginxStack: NginxDockerImageStack, s3Stack: NautobotSecretsS3Stack, vpcStack: NautobotVpcStack, dbStack: NautobotDbStack, props?: StackProps) {
@@ -16,6 +21,7 @@ export class NautobotFargateEcsStack extends Stack {
     const vpc = vpcStack.vpc;
 
     const cluster = new Cluster(this, 'NautobotCluster', {
+      containerInsights: true,
       vpc,
     });
 
@@ -55,133 +61,148 @@ export class NautobotFargateEcsStack extends Stack {
       memoryLimitMiB: 4096,
       cpu: 2048,
     });
+    // Path to .env file
+    const objectKey = '.env';
+    const envFilePath = path.join(__dirname, '..', 'lib/secrets/', objectKey);
 
-    const nautobotWorkerContainer = nautobotWorkerTaskDefinition.addContainer('nautobot-worker', {
-      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
-      logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotWorker' }),
-      environment: {
-        // Make sure to pass the database and Redis information to the Nautobot app.
+    // Ensure .env file exists
+    if (fs.existsSync(envFilePath)) {
+      // Load and parse .env file
+      const envConfig = dotenv.parse(fs.readFileSync(envFilePath));
+
+      // Initialize the environment variable object
+      let environment: { [key: string]: string } = {        // Make sure to pass the database and Redis information to the Nautobot app.
         'NAUTOBOT_DB_HOST': dbStack.postgresInstance.dbInstanceEndpointAddress,
         'NAUTOBOT_REDIS_HOST': dbStack.redisCluster.attrRedisEndpointAddress,
-      },
-      command: [
-        'nautobot-server',
-        'celery',
-        'worker',
-      ],
-      healthCheck: {
-        command: ['CMD', 'bash', '-c', 'nautobot-server celery inspect ping --destination celery@$HOSTNAME'],
-        interval: Duration.seconds(30),
-        timeout: Duration.seconds(10),
-        startPeriod: Duration.seconds(60),
-        retries: 5,
+      };
+      // Initialize the secrets object
+      let secrets: { [key: string]: ecs.Secret } = {};
+
+      // Iterate over each environment variable
+      for (const key in envConfig) {
+        // Retrieve the secret from AWS Secrets Manager
+        const secret = secretsmanager.Secret.fromSecretNameV2(this, `${key}FromSecretsManager`, key);
+
+        // Add the secret to the secrets object
+        secrets[key] = ecs.Secret.fromSecretsManager(secret);
       }
-    });
 
-    const workerService = new FargateService(this, 'WorkerService', {
-      cluster,
-      taskDefinition: nautobotWorkerTaskDefinition,
-      assignPublicIp: false,
-      desiredCount: 2,
-      vpcSubnets: {
-        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
-      },
-    });
+      const nautobotWorkerContainer = nautobotWorkerTaskDefinition.addContainer('nautobot-worker', {
+        image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+        logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotWorker' }),
+        environment: environment,
+        secrets: secrets,
+        command: [
+          'nautobot-server',
+          'celery',
+          'worker',
+        ],
+        healthCheck: {
+          command: ['CMD', 'bash', '-c', 'nautobot-server celery inspect ping --destination celery@$HOSTNAME'],
+          interval: Duration.seconds(30),
+          timeout: Duration.seconds(10),
+          startPeriod: Duration.seconds(60),
+          retries: 5,
+        }
+      });
 
-    // Nautobot Scheduler Task Definition and Service
-    const nautobotSchedulerTaskDefinition = new FargateTaskDefinition(this, 'NautobotSchedulerTaskDefinition', {
-      memoryLimitMiB: 4096,
-      cpu: 2048,
-    });
+      const workerService = new FargateService(this, 'WorkerService', {
+        cluster,
+        taskDefinition: nautobotWorkerTaskDefinition,
+        assignPublicIp: false,
+        desiredCount: 2,
+        vpcSubnets: {
+          subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      });
 
-    const nautobotSchedulerContainer = nautobotSchedulerTaskDefinition.addContainer('nautobot-scheduler', {
-      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
-      logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotScheduler' }),
-      environment: {
-        // Make sure to pass the database and Redis information to the Nautobot app.
-        'NAUTOBOT_DB_HOST': dbStack.postgresInstance.dbInstanceEndpointAddress,
-        'NAUTOBOT_REDIS_HOST': dbStack.redisCluster.attrRedisEndpointAddress,
-      },
-      command: [
-        'nautobot-server',
-        'celery',
-        'beat',
-      ],
-    });
+      // Nautobot Scheduler Task Definition and Service
+      const nautobotSchedulerTaskDefinition = new FargateTaskDefinition(this, 'NautobotSchedulerTaskDefinition', {
+        memoryLimitMiB: 4096,
+        cpu: 2048,
+      });
 
-    const schedulerService = new FargateService(this, 'SchedulerService', {
-      cluster,
-      taskDefinition: nautobotSchedulerTaskDefinition,
-      assignPublicIp: false,
-      desiredCount: 1, // Generally, there should be only one scheduler instance running
-      vpcSubnets: {
-        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
-      },
-    });
+      const nautobotSchedulerContainer = nautobotSchedulerTaskDefinition.addContainer('nautobot-scheduler', {
+        image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+        logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotScheduler' }),
+        environment: environment,
+        command: [
+          'nautobot-server',
+          'celery',
+          'beat',
+        ],
+      });
 
-    // Nautobot App Task Definition and Service
-    const nautobotAppTaskDefinition = new FargateTaskDefinition(this, 'NautobotAppTaskDefinition', {
-      memoryLimitMiB: 4096,
-      cpu: 2048,
-    });
+      const schedulerService = new FargateService(this, 'SchedulerService', {
+        cluster,
+        taskDefinition: nautobotSchedulerTaskDefinition,
+        assignPublicIp: false,
+        desiredCount: 1, // Generally, there should be only one scheduler instance running
+        vpcSubnets: {
+          subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      });
 
-    const nautobotAppContainer = nautobotAppTaskDefinition.addContainer('nautobot', {
-      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
-      logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotApp' }),
-      environment: {
-        // Make sure to pass the database and Redis information to the Nautobot app.
-        'NAUTOBOT_DB_HOST': dbStack.postgresInstance.dbInstanceEndpointAddress,
-        'NAUTOBOT_REDIS_HOST': dbStack.redisCluster.attrRedisEndpointAddress,
-      },
-      // Can replace/use AWS Secrets Manager to store sensitive information.
-      //https://docs.aws.amazon.com/cdk/api/v1/docs/@aws-cdk_aws-ecs.EnvironmentFile.html
-      healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost/health || exit 1'],
-        interval: Duration.seconds(30),
-        timeout: Duration.seconds(10),
-        startPeriod: Duration.seconds(60),
-        retries: 5,
-      }
-    });
+      // Nautobot App Task Definition and Service
+      const nautobotAppTaskDefinition = new FargateTaskDefinition(this, 'NautobotAppTaskDefinition', {
+        memoryLimitMiB: 4096,
+        cpu: 2048,
+      });
 
-    nautobotAppContainer.addPortMappings({
-      containerPort: 8080,
-      protocol: Protocol.TCP,
-    });
+      const nautobotAppContainer = nautobotAppTaskDefinition.addContainer('nautobot', {
+        image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+        logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotApp' }),
+        environment: environment,
+        // Can replace/use AWS Secrets Manager to store sensitive information.
+        //https://docs.aws.amazon.com/cdk/api/v1/docs/@aws-cdk_aws-ecs.EnvironmentFile.html
+        healthCheck: {
+          command: ['CMD-SHELL', 'curl -f http://localhost/health || exit 1'],
+          interval: Duration.seconds(30),
+          timeout: Duration.seconds(10),
+          startPeriod: Duration.seconds(60),
+          retries: 5,
+        }
+      });
 
-    const appService = new FargateService(this, 'AppService', {
-      cluster,
-      taskDefinition: nautobotAppTaskDefinition,
-      assignPublicIp: false,
-      desiredCount: 2,
-      vpcSubnets: {
-        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
-      },
-    });
+      nautobotAppContainer.addPortMappings({
+        containerPort: 8080,
+        protocol: Protocol.TCP,
+      });
 
-    // Add necessary load balancer configuration
-    const listener = alb.addListener('Listener', {
-      port: 80,
-      protocol: ApplicationProtocol.HTTP,
-      // certificates: [] // Provide your SSL Certificates here
-    });
+      const appService = new FargateService(this, 'AppService', {
+        cluster,
+        taskDefinition: nautobotAppTaskDefinition,
+        assignPublicIp: false,
+        desiredCount: 2,
+        vpcSubnets: {
+          subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      });
 
-    listener.addTargets('NginxService', {
-      port: 80,
-      targets: [nginxService],
-      healthCheck: {
-        path: '/health',
-        port: "80",
-      },
-    });
+      // Add necessary load balancer configuration
+      const listener = alb.addListener('Listener', {
+        port: 80,
+        protocol: ApplicationProtocol.HTTP,
+        // certificates: [] // Provide your SSL Certificates here if above is HTTP(S)
+      });
 
-    const securityGroup = new SecurityGroup(this, 'NautobotSecurityGroup', {
-      vpc,
-      allowAllOutbound: true,
-    });
+      listener.addTargets('NginxService', {
+        port: 80,
+        targets: [nginxService],
+        healthCheck: {
+          path: '/health',
+          port: "80",
+        },
+      });
 
-    securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
-    securityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
+      const securityGroup = new SecurityGroup(this, 'NautobotSecurityGroup', {
+        vpc,
+        allowAllOutbound: true,
+      });
 
+      securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
+      securityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
+
+    }
   }
 }
