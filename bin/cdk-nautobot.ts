@@ -1,15 +1,25 @@
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
+import { NautobotVpcStack } from '../lib/nautobot-vpc-stack';
 import { NautobotDockerImageStack } from '../lib/nautobot-docker-image-stack';
 import { NginxDockerImageStack } from '../lib/nginx-docker-image-stack';
 import { NautobotFargateEcsStack } from '../lib/nautobot-fargate-ecs-stack';
-import { NautobotSecretsS3Stack } from '../lib/nautobot-secrets-s3-stack';
-
+import { NautobotSecretsS3Stack } from '../lib/nautobot-secrets-stack';
+import { NautobotDbStack } from '../lib/nautobot-db-stack';
 
 const app = new cdk.App();
-const nautobot_secrets_s3_stack = new NautobotSecretsS3Stack(app, 'NautobotSecretsS3Stack');
-const docker_image_stack = new NautobotDockerImageStack(app, 'NautobotDockerImageStack');
-const nginx_image_stack = new NginxDockerImageStack(app, 'NginxDockerImageStack');
-const fargate_ecs_stack = new NautobotFargateEcsStack(app, 'NautobotFargateEcsStack', docker_image_stack, nginx_image_stack, nautobot_secrets_s3_stack);
+const nautobotVpcStack = new NautobotVpcStack(app, 'NautobotVpcStack');
+const nautobotDbStack = new NautobotDbStack(app, 'NautobotDbStack', nautobotVpcStack);
+const nautobotSecretsS3Stack = new NautobotSecretsS3Stack(app, 'NautobotSecretsS3Stack');
+const nautobotDockerImageStack = new NautobotDockerImageStack(app, 'NautobotDockerImageStack');
+const nginxDockerImageStack = new NginxDockerImageStack(app, 'NginxDockerImageStack');
 
+new NautobotFargateEcsStack(app,
+  'NautobotFargateEcsStack',
+  nautobotDockerImageStack,
+  nginxDockerImageStack,
+  nautobotSecretsS3Stack,
+  nautobotVpcStack,
+  nautobotDbStack
+);
 app.synth();
