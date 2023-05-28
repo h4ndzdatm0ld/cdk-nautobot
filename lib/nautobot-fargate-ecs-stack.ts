@@ -21,6 +21,10 @@ export class NautobotFargateEcsStack extends Stack {
       vpc,
     });
 
+    cluster.addDefaultCloudMapNamespace({
+      name: 'nauotbot',
+    });
+
     const alb = new ApplicationLoadBalancer(this, 'NautobotALB', {
       vpc,
       internetFacing: true,
@@ -103,6 +107,7 @@ export class NautobotFargateEcsStack extends Stack {
     const nautobotAppTaskDefinition = new FargateTaskDefinition(this, 'NautobotAppTaskDefinition', {
       memoryLimitMiB: 4096,
       cpu: 2048,
+
     });
 
     const nautobotAppContainer = nautobotAppTaskDefinition.addContainer('nautobot', {
@@ -122,7 +127,9 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     nautobotAppContainer.addPortMappings({
+      name: "nautobot",
       containerPort: 8080,
+      hostPort: 8080,
       protocol: Protocol.TCP,
     });
 
@@ -132,9 +139,19 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     nginxContainer.addPortMappings({
+      name: "nginx",
       containerPort: 80,
+      hostPort: 80,
       protocol: Protocol.TCP,
     });
+
+
+    const albSecurityGroup = new SecurityGroup(this, 'ALBSecurityGroup', {
+      vpc,
+      allowAllOutbound: true, // Change this as per your requirements
+    });
+
+    albSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
 
     const nautobotSecurityGroup = new SecurityGroup(this, 'NautobotSecurityGroup', {
       vpc,
@@ -143,14 +160,31 @@ export class NautobotFargateEcsStack extends Stack {
 
     nautobotSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
     nautobotSecurityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
+    nautobotSecurityGroup.addIngressRule(albSecurityGroup, Port.tcp(8080), 'Allow inbound from ALB');
 
     const nautobotAppService = new FargateService(this, 'NautobotAppService', {
       cluster,
       taskDefinition: nautobotAppTaskDefinition,
       assignPublicIp: false,
       desiredCount: 1,
-      vpcSubnets: vpc,
+      vpcSubnets: {
+        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
       securityGroups: [nautobotSecurityGroup],
+      serviceConnectConfiguration: {
+        services: [
+          {
+            portMappingName: 'nginx',
+            dnsName: 'nginx',
+            port: 80,
+          },
+          {
+            portMappingName: 'nautobot',
+            dnsName: 'nautobot',
+            port: 8080,
+          },
+        ],
+      },
     });
 
     // Add necessary load balancer configuration
@@ -161,11 +195,13 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     listener.addTargets('NautobotAppService', {
-      port: 80,
+      port: 8080,
       targets: [nautobotAppService],
       healthCheck: {
         path: '/health',
-        port: "80",
+        port: "8080",
+        interval: Duration.seconds(60),
+        healthyHttpCodes: '200,301',
       },
     });
   }
