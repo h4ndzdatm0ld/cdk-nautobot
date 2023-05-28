@@ -9,6 +9,7 @@ import { NautobotSecretsStack } from './nautobot-secrets-stack';
 import { NautobotVpcStack } from './nautobot-vpc-stack';
 import { NautobotDbStack } from './nautobot-db-stack';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
+import { Role, ServicePrincipal, ManagedPolicy } from 'aws-cdk-lib/aws-iam';
 
 export class NautobotFargateEcsStack extends Stack {
   constructor(scope: Construct, id: string, dockerStack: NautobotDockerImageStack, nginxStack: NginxDockerImageStack, secretsStack: NautobotSecretsStack, vpcStack: NautobotVpcStack, dbStack: NautobotDbStack, props?: StackProps) {
@@ -25,6 +26,24 @@ export class NautobotFargateEcsStack extends Stack {
       name: 'nauotbot',
     });
 
+    // Define a new IAM role for your Fargate Task Definitions
+    const ecsTaskRole = new Role(this, 'ECSTaskRole', {
+      assumedBy: new ServicePrincipal('ecs-tasks.amazonaws.com'),
+    });
+
+    // Attach the necessary managed policies to your role
+    ecsTaskRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
+    ecsTaskRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess'));
+
+    // Define a new IAM role for your Fargate Service Execution
+    const ecsExecutionRole = new Role(this, 'ECSExecutionRole', {
+      assumedBy: new ServicePrincipal('ecs-tasks.amazonaws.com'),
+    });
+
+    // Attach the necessary managed policies to your role
+    ecsExecutionRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
+    ecsExecutionRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess'));
+
     const alb = new ApplicationLoadBalancer(this, 'NautobotALB', {
       vpc,
       internetFacing: true,
@@ -34,6 +53,8 @@ export class NautobotFargateEcsStack extends Stack {
     const nautobotWorkerTaskDefinition = new FargateTaskDefinition(this, 'NautobotWorkerTaskDefinition', {
       memoryLimitMiB: 4096,
       cpu: 2048,
+      taskRole: ecsTaskRole,
+      executionRole: ecsExecutionRole,
     });
     // Initialize the environment variable object
     let environment: { [key: string]: string } = {        // Make sure to pass the database and Redis information to the Nautobot app.
@@ -67,6 +88,7 @@ export class NautobotFargateEcsStack extends Stack {
 
     const workerService = new FargateService(this, 'WorkerService', {
       cluster,
+      enableExecuteCommand: true,
       taskDefinition: nautobotWorkerTaskDefinition,
       assignPublicIp: false,
       desiredCount: 2,
@@ -79,6 +101,8 @@ export class NautobotFargateEcsStack extends Stack {
     const nautobotSchedulerTaskDefinition = new FargateTaskDefinition(this, 'NautobotSchedulerTaskDefinition', {
       memoryLimitMiB: 4096,
       cpu: 2048,
+      taskRole: ecsTaskRole,
+      executionRole: ecsExecutionRole,
     });
 
     const nautobotSchedulerContainer = nautobotSchedulerTaskDefinition.addContainer('nautobot-scheduler', {
@@ -95,6 +119,7 @@ export class NautobotFargateEcsStack extends Stack {
 
     const schedulerService = new FargateService(this, 'SchedulerService', {
       cluster,
+      enableExecuteCommand: true,
       taskDefinition: nautobotSchedulerTaskDefinition,
       assignPublicIp: false,
       desiredCount: 1, // Generally, there should be only one scheduler instance running
@@ -107,6 +132,8 @@ export class NautobotFargateEcsStack extends Stack {
     const nautobotAppTaskDefinition = new FargateTaskDefinition(this, 'NautobotAppTaskDefinition', {
       memoryLimitMiB: 4096,
       cpu: 2048,
+      taskRole: ecsTaskRole,
+      executionRole: ecsExecutionRole,
 
     });
 
@@ -164,6 +191,7 @@ export class NautobotFargateEcsStack extends Stack {
 
     const nautobotAppService = new FargateService(this, 'NautobotAppService', {
       cluster,
+      enableExecuteCommand: true,
       taskDefinition: nautobotAppTaskDefinition,
       assignPublicIp: false,
       desiredCount: 1,
