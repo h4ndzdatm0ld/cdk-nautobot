@@ -1,6 +1,13 @@
 # Nautobot AWS CDK Deployment
 
-This project contains the AWS CDK code to deploy Nautobot to AWS. The CDK code was largely developed by following the [Nautobot In AWS Fargate](https://blog.networktocode.com/post/nautobot-in-aws-fargate/) blog post by [Network to Code](https://www.networktocode.com/).
+This project contains the AWS CDK code to deploy Nautobot to AWS. The CDK code was influenced by the [Nautobot In AWS Fargate](https://blog.networktocode.com/post/nautobot-in-aws-fargate/) blog post by [Network to Code](https://www.networktocode.com/). However, the mentioned blog post is missing a lot of details about Redis and back end database (Postgres in this case). Other differences are the simplification of building the Docker images which allows for plugins and custom attributes to be set in the `nautobot_config.py` file and the use of AWS Secrets Manager to store the Nautobot secrets. Also, creating and storing the artifacts in ECR is drastically simplified with the `DockerImageAsset` construct.
+
+# SSM - Accessing Containers
+
+If there is need to access the containers, AWS SSM provides a way to do this. The following commands can be used to access the containers:
+
+# TODO
+
 
 ![Nautobot Architechture](./images/architecture-diagram.png)
 
@@ -42,4 +49,31 @@ The following files and directories represent the core components of the applica
 
 ## How to Run
 
-// TODO: Add instructions on how to run the project.
+### Secrets and Environment Variables
+
+There are two `.env` in this project that are used for the Nautobot Application service. The more sensitive information is under `/lib/secrets/env-example`. This file is used to create the AWS Secrets Manager secret. The other `.env` file is under `/lib/nautobot-app/.env-example`. This file is used to set the environment variables for the Nautobot application.  The `/lib/secrets/.env-example`  and `lib/nautobot-app/.env-example` files are meant to be edited and then renamed or copied `.env` before running the CDK stack.
+
+### CDK Bootstrap and Deploy
+
+Ensure that you have proper AWS credentials set up on your machine. Then, run the following commands:
+
+Bootstrap CDK environment to your AWS account
+
+
+```bash
+cdk bootstrap
+```
+
+Deploy the stacks
+
+```bash
+cdk deploy --all
+```
+
+## How to Destroy
+
+1. Manually delete the `namespace` in ECS (Usually this holds it up). Once this is complete, you can run the following command to destroy the stacks:
+
+```bash
+cdk destroy
+```
