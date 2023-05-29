@@ -16,7 +16,7 @@ export class NautobotDbStack extends Stack {
     super(scope, id, props);
 
     const vpc = vpcStack.vpc;
-    const instanceType = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE);
+    const instanceType = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM);
     this.nautobotDbPassword = new Secret(this, "NautobotDbPassword", {
       secretName: "NautobotDbPassword",
       description: "Nautobot DB password",
@@ -31,7 +31,7 @@ export class NautobotDbStack extends Stack {
     const dbSecurityGroup = new SecurityGroup(this, 'NautobotDbSecurityGroup', {
       vpc: vpc,
       securityGroupName: 'NautobotDbSecurityGroup',
-      allowAllOutbound: false,
+      allowAllOutbound: true,
       description: 'Nautobot DB Security Group',
     });
 
@@ -77,7 +77,7 @@ export class NautobotDbStack extends Stack {
 
     // Add the security group to the Redis cache cluster
     this.redisCluster = new elasticache.CfnCacheCluster(this, 'NautobotRedis', {
-      cacheNodeType: 'cache.t2.micro',
+      cacheNodeType: 'cache.t4g.micro',
       engine: 'redis',
       numCacheNodes: 1,
       autoMinorVersionUpgrade: true,
