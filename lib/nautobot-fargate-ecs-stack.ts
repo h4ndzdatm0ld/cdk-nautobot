@@ -162,7 +162,7 @@ export class NautobotFargateEcsStack extends Stack {
     const nautobotAppContainer = nautobotAppTaskDefinition.addContainer("nautobot", {
       image: ContainerImage.fromDockerImageAsset(dockerStack.image),
       logging: LogDrivers.awsLogs({ streamPrefix: "NautobotApp" }),
-      environment: environment,
+      environment: environment, // Pass the environment variables to the container
       secrets: secretsStack.secrets,
       healthCheck: {
         command: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"],
