@@ -18,13 +18,6 @@ export class NautobotVpcStack extends Stack {
     });
     this.vpc = vpc
 
-    const alb = new ApplicationLoadBalancer(this, 'NautobotALB', {
-      vpc,
-      internetFacing: true,
-      loadBalancerName: 'NautobotALB',
-    });
-    this.alb = alb
-
     const nautobotSecurityGroup = new SecurityGroup(this, 'NautobotSecurityGroup', {
       vpc,
       allowAllOutbound: true,
@@ -32,8 +25,15 @@ export class NautobotVpcStack extends Stack {
     });
 
     nautobotSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
-    nautobotSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(8080), 'Allow inbound from ALB');
 
     this.nautobotSecurityGroup = nautobotSecurityGroup
+
+    const alb = new ApplicationLoadBalancer(this, 'NautobotALB', {
+      vpc,
+      internetFacing: true,
+      loadBalancerName: 'NautobotALB',
+      securityGroup: this.nautobotSecurityGroup
+    });
+    this.alb = alb
   }
 }

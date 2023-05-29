@@ -246,7 +246,7 @@ export class NautobotFargateEcsStack extends Stack {
         path: "/health/",
         port: "80",
         interval: Duration.seconds(60),
-        healthyHttpCodes: "200,301",
+        healthyHttpCodes: "200",
       },
     });
   }
