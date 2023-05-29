@@ -16,7 +16,7 @@ export class NautobotDbStack extends Stack {
     super(scope, id, props);
 
     const vpc = vpcStack.vpc;
-    const instanceType = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO)
+    const instanceType = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE);
     this.nautobotDbPassword = new Secret(this, "NautobotDbPassword", {
       secretName: "NautobotDbPassword",
       description: "Nautobot DB password",
@@ -32,6 +32,7 @@ export class NautobotDbStack extends Stack {
       vpc: vpc,
       securityGroupName: 'NautobotDbSecurityGroup',
       allowAllOutbound: false,
+      description: 'Nautobot DB Security Group',
     });
 
     dbSecurityGroup.addIngressRule(Peer.ipv4(vpc.vpcCidrBlock), Port.tcp(5432)
@@ -68,6 +69,7 @@ export class NautobotDbStack extends Stack {
     const redisSecurityGroup = new SecurityGroup(this, 'RedisSecurityGroup', {
       vpc,
       allowAllOutbound: true,
+      description: "Nautobot Redis Security Group"
     });
 
     // Allow inbound traffic on default Redis port (6379) from all sources in the VPC
