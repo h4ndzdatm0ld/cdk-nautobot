@@ -183,6 +183,13 @@ export class NautobotFargateEcsStack extends Stack {
     const nginxContainer = nautobotAppTaskDefinition.addContainer("nginx", {
       image: ContainerImage.fromDockerImageAsset(nginxStack.image),
       logging: LogDrivers.awsLogs({ streamPrefix: "Nginx" }),
+      healthCheck: {
+        command: ["CMD-SHELL", "nginx -t || exit 1"],
+        interval: Duration.seconds(30),
+        timeout: Duration.seconds(5),
+        startPeriod: Duration.seconds(0),
+        retries: 3,
+      },
     });
 
     nginxContainer.addPortMappings({
@@ -193,18 +200,18 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     const nautobotAppService = new FargateService(this, "NautobotAppService", {
+      circuitBreaker: { rollback: true },
       cluster,
       serviceName: "NautobotAppService",
       enableExecuteCommand: true,
       taskDefinition: nautobotAppTaskDefinition,
-      assignPublicIp: false,
+      assignPublicIp: true,
       desiredCount: 1,
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS,
       },
       securityGroups: [nautobotSecurityGroup],
       cloudMapOptions: {
-        // This will be your service_name.namespace
         name: "nautobot-app",
         cloudMapNamespace: cluster.defaultCloudMapNamespace,
         dnsRecordType: DnsRecordType.A,
@@ -233,11 +240,11 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     listener.addTargets("NautobotAppService", {
-      port: 8080,
-      targets: [nautobotAppService],
+      port: 80,
+      targets: [nautobotAppService.loadBalancerTarget({ containerName: "nginx", containerPort: 80 })],
       healthCheck: {
-        path: "/health",
-        port: "8080",
+        path: "/health/",
+        port: "80",
         interval: Duration.seconds(60),
         healthyHttpCodes: "200,301",
       },
