@@ -1,13 +1,21 @@
 # Nautobot AWS CDK Deployment
 
-This project contains the AWS CDK code to deploy Nautobot to AWS. The CDK code was influenced by the [Nautobot In AWS Fargate](https://blog.networktocode.com/post/nautobot-in-aws-fargate/) blog post by [Network to Code](https://www.networktocode.com/). However, the mentioned blog post is missing a lot of details about Redis and back end database (Postgres in this case). Other differences are the simplification of building the Docker images which allows for plugins and custom attributes to be set in the `nautobot_config.py` file and the use of AWS Secrets Manager to store the Nautobot secrets. Also, creating and storing the artifacts in ECR is drastically simplified with the `DockerImageAsset` construct.
+This project contains the AWS CDK code to deploy Nautobot to AWS. The CDK code was influenced by the [Nautobot In AWS Fargate](https://blog.networktocode.com/post/nautobot-in-aws-fargate/) blog post by [Network to Code](https://www.networktocode.com/). However, the mentioned blog post is missing a lot of details about Redis and back end database (Postgres in this case). Other differences are the simplification of building the Docker images and ECR which allows for plugin installation and custom attributes to be set in the `nautobot_config.py` file for the Nautobot container and the use of AWS Secrets Manager to store secrets.
 
-# SSM - Accessing Containers
+## SSM - Accessing Containers
 
-If there is need to access the containers, AWS SSM provides a way to do this. The following commands can be used to access the containers:
+If there is a need to access the containers, AWS SSM provides a way to do this. The following commands can be used to access the containers:
 
-# TODO
+- `ssm.sh` - SSM into a Cluster's Service
+- `./ssm.sh --help` - Get Help
 
+Example (These values can be grabbed from AWS Console)
+
+```bash
+./ssm.sh NautobotCluster NautobotFargateEcsStack-NautobotAppServiceC59AF503-aiiGAlPRpYMd
+```
+
+## Architecture
 
 ![Nautobot Architechture](./images/architecture-diagram.png)
 
@@ -22,11 +30,11 @@ The `cdk.json` file tells the CDK Toolkit how to execute your app.
 * `cdk diff`        compare deployed stack with current state
 * `cdk synth`       emits the synthesized CloudFormation template
 
-# Project Structure
+## Project Structure
 
 This project is structured to use AWS CDK to build and deploy a Nautobot application using ECS Fargate, with its data stored in RDS PostgreSQL and cached in ElastiCache Redis.
 
-## File Descriptions
+### File Descriptions
 
 The following files and directories represent the core components of the application:
 
@@ -58,7 +66,6 @@ There are two `.env` in this project that are used for the Nautobot Application 
 Ensure that you have proper AWS credentials set up on your machine. Then, run the following commands:
 
 Bootstrap CDK environment to your AWS account
-
 
 ```bash
 cdk bootstrap

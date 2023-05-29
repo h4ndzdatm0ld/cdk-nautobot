@@ -1,7 +1,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
-import { SubnetType, SecurityGroup, Peer, Port } from 'aws-cdk-lib/aws-ec2';
+import { SubnetType } from 'aws-cdk-lib/aws-ec2';
 import { Cluster, ContainerImage, FargateTaskDefinition, LogDrivers, FargateService, Protocol } from 'aws-cdk-lib/aws-ecs';
-import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import { ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { Construct } from 'constructs';
 import { NautobotDockerImageStack } from './nautobot-docker-image-stack';
 import { NginxDockerImageStack } from './nginx-docker-image-stack';
@@ -10,28 +10,34 @@ import { NautobotVpcStack } from './nautobot-vpc-stack';
 import { NautobotDbStack } from './nautobot-db-stack';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import { Role, ServicePrincipal, ManagedPolicy } from 'aws-cdk-lib/aws-iam';
+import { DnsRecordType } from "@aws-cdk/aws-servicediscovery";
 
 export class NautobotFargateEcsStack extends Stack {
   constructor(scope: Construct, id: string, dockerStack: NautobotDockerImageStack, nginxStack: NginxDockerImageStack, secretsStack: NautobotSecretsStack, vpcStack: NautobotVpcStack, dbStack: NautobotDbStack, props?: StackProps) {
     super(scope, id, props);
 
+    // variables from other stacks
     const vpc = vpcStack.vpc;
+    const alb = vpcStack.alb;
+    const nautobotSecurityGroup = vpcStack.nautobotSecurityGroup;
+    const namespace: string = 'nautobot-service.local';
 
     const cluster = new Cluster(this, 'NautobotCluster', {
       containerInsights: true,
       vpc,
+      clusterName: 'NautobotCluster',
     });
 
     cluster.addDefaultCloudMapNamespace({
-      name: 'nauotbot',
+      name: namespace,
     });
 
-    // Define a new IAM role for your Fargate Task Definitions
+    // Define a new IAM role for Fargate Task Definitions
     const ecsTaskRole = new Role(this, 'ECSTaskRole', {
       assumedBy: new ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
 
-    // Attach the necessary managed policies to your role
+    // Attach the necessary managed policies
     ecsTaskRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
     ecsTaskRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess'));
 
@@ -43,11 +49,6 @@ export class NautobotFargateEcsStack extends Stack {
     // Attach the necessary managed policies to your role
     ecsExecutionRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
     ecsExecutionRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess'));
-
-    const alb = new ApplicationLoadBalancer(this, 'NautobotALB', {
-      vpc,
-      internetFacing: true,
-    });
 
     // Nautobot Worker
     const nautobotWorkerTaskDefinition = new FargateTaskDefinition(this, 'NautobotWorkerTaskDefinition', {
@@ -84,16 +85,20 @@ export class NautobotFargateEcsStack extends Stack {
       }
     });
 
-
-
-    const workerService = new FargateService(this, 'WorkerService', {
+    const workerService = new FargateService(this, 'NautobotWorkerService', {
       cluster,
+      serviceName: 'NautobotWorkerService',
       enableExecuteCommand: true,
       taskDefinition: nautobotWorkerTaskDefinition,
       assignPublicIp: false,
       desiredCount: 2,
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      cloudMapOptions: {
+        name: 'nautobot-worker',
+        cloudMapNamespace: cluster.defaultCloudMapNamespace,
+        dnsRecordType: DnsRecordType.A,
       },
     });
 
@@ -117,14 +122,20 @@ export class NautobotFargateEcsStack extends Stack {
       ],
     });
 
-    const schedulerService = new FargateService(this, 'SchedulerService', {
+    const schedulerService = new FargateService(this, 'NautobotSchedulerService', {
       cluster,
+      serviceName: 'NautobotSchedulerService',
       enableExecuteCommand: true,
       taskDefinition: nautobotSchedulerTaskDefinition,
       assignPublicIp: false,
       desiredCount: 1, // Generally, there should be only one scheduler instance running
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      cloudMapOptions: {
+        name: 'nautobot-scheduler',
+        cloudMapNamespace: cluster.defaultCloudMapNamespace,
+        dnsRecordType: DnsRecordType.A,
       },
     });
 
@@ -134,7 +145,6 @@ export class NautobotFargateEcsStack extends Stack {
       cpu: 2048,
       taskRole: ecsTaskRole,
       executionRole: ecsExecutionRole,
-
     });
 
     const nautobotAppContainer = nautobotAppTaskDefinition.addContainer('nautobot', {
@@ -142,8 +152,6 @@ export class NautobotFargateEcsStack extends Stack {
       logging: LogDrivers.awsLogs({ streamPrefix: 'NautobotApp' }),
       environment: environment,
       secrets: secretsStack.secrets,
-      // Can replace/use AWS Secrets Manager to store sensitive information.
-      //https://docs.aws.amazon.com/cdk/api/v1/docs/@aws-cdk_aws-ecs.EnvironmentFile.html
       healthCheck: {
         command: ['CMD-SHELL', 'curl -f http://localhost/health || exit 1'],
         interval: Duration.seconds(30),
@@ -172,25 +180,9 @@ export class NautobotFargateEcsStack extends Stack {
       protocol: Protocol.TCP,
     });
 
-
-    const albSecurityGroup = new SecurityGroup(this, 'ALBSecurityGroup', {
-      vpc,
-      allowAllOutbound: true, // Change this as per your requirements
-    });
-
-    albSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
-
-    const nautobotSecurityGroup = new SecurityGroup(this, 'NautobotSecurityGroup', {
-      vpc,
-      allowAllOutbound: true,
-    });
-
-    nautobotSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
-    nautobotSecurityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
-    nautobotSecurityGroup.addIngressRule(albSecurityGroup, Port.tcp(8080), 'Allow inbound from ALB');
-
     const nautobotAppService = new FargateService(this, 'NautobotAppService', {
       cluster,
+      serviceName: 'NautobotAppService',
       enableExecuteCommand: true,
       taskDefinition: nautobotAppTaskDefinition,
       assignPublicIp: false,
@@ -199,6 +191,12 @@ export class NautobotFargateEcsStack extends Stack {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS,
       },
       securityGroups: [nautobotSecurityGroup],
+      cloudMapOptions: {
+        // This will be your service_name.namespace
+        name: 'nautobot-app',
+        cloudMapNamespace: cluster.defaultCloudMapNamespace,
+        dnsRecordType: DnsRecordType.A,
+      },
       serviceConnectConfiguration: {
         services: [
           {
