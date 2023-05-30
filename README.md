@@ -6,13 +6,12 @@ This project contains the AWS CDK code to deploy Nautobot to AWS. The CDK code w
 
 If there is a need to access the containers, AWS SSM provides a way to do this. The following commands can be used to access the containers:
 
-- `ssm.sh` - SSM into a Cluster's Service
-- `./ssm.sh --help` - Get Help
+- `ecs-session --list` - List the ECS clusters / Containers
 
-Example (These values can be grabbed from AWS Console)
+Example:
 
 ```bash
-./ssm.sh NautobotCluster NautobotFargateEcsStack-NautobotAppServiceC59AF503-aiiGAlPRpYMd
+ecs-session nautobot
 ```
 
 ## Architecture

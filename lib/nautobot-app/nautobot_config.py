@@ -32,7 +32,7 @@ default_db_settings = {
 DATABASES = {
     "default": {
         "NAME": os.getenv("NAUTOBOT_DB_NAME", "nautobot"),  # Database name
-        "USER": os.getenv("NAUTOBOT_DB_USER", ""),  # Database username
+        "USER": os.getenv("NAUTOBOT_DB_USER", "nautobot"),  # Database username
         "PASSWORD": os.getenv("NAUTOBOT_DB_PASSWORD", ""),  # Database password
         "HOST": os.getenv("NAUTOBOT_DB_HOST", "localhost"),  # Database server
         "PORT": os.getenv(

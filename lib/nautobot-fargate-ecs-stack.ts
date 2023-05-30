@@ -165,7 +165,7 @@ export class NautobotFargateEcsStack extends Stack {
       environment: environment, // Pass the environment variables to the container
       secrets: secretsStack.secrets,
       healthCheck: {
-        command: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"],
+        command: ["CMD-SHELL", "curl -f http://localhost/health/ || exit 1"],
         interval: Duration.seconds(30),
         timeout: Duration.seconds(10),
         startPeriod: Duration.seconds(60),
@@ -178,6 +178,7 @@ export class NautobotFargateEcsStack extends Stack {
       containerPort: 8080,
       hostPort: 8080,
       protocol: Protocol.TCP,
+      appProtocol: ecs.AppProtocol.http,
     });
 
     const nginxContainer = nautobotAppTaskDefinition.addContainer("nginx", {
@@ -197,6 +198,13 @@ export class NautobotFargateEcsStack extends Stack {
       containerPort: 80,
       hostPort: 80,
       protocol: Protocol.TCP,
+      appProtocol: ecs.AppProtocol.http,
+    });
+
+    // Wait until the Nautobot app container is healthy before starting the Nginx container
+    nginxContainer.addContainerDependencies({
+      container: nautobotAppContainer,
+      condition: ecs.ContainerDependencyCondition.HEALTHY
     });
 
     const nautobotAppService = new FargateService(this, "NautobotAppService", {
@@ -229,6 +237,9 @@ export class NautobotFargateEcsStack extends Stack {
             port: 8080,
           },
         ],
+        logDriver: ecs.LogDrivers.awsLogs({
+          streamPrefix: 'sc-traffic',
+        }),
       },
     });
 

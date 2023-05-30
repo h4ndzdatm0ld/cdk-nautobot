@@ -4,28 +4,6 @@ ARG NAUTOBOT_VERSION
 # Start with the official Nautobot image as a base
 FROM networktocode/nautobot:${NAUTOBOT_VERSION}
 
-# # Switch to the root user
-# USER root
-
-# # Update the system and install necessary packages
-# RUN apt-get update && apt-get install -y \
-#     curl \
-#     unzip \
-#     tar \
-#     gzip \
-#     python3 \
-#     python3-pip
-
-# # Download and install the SSM Agent
-# RUN curl https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb -o amazon-ssm-agent.deb
-# RUN dpkg -i amazon-ssm-agent.deb
-
-# Create the necessary log directory and set permissions
-# RUN mkdir -p /var/log/amazon/ssm/ && chown -R nautobot:nautobot /var/log/amazon/ssm/
-
-# Switch back to the nautobot user
-USER nautobot
-
 ARG NAUTOBOT_ALLOWED_HOSTS
 ENV NAUTOBOT_ALLOWED_HOSTS=${NAUTOBOT_ALLOWED_HOSTS}
 
@@ -48,6 +26,8 @@ ENV NAUTOBOT_NAPALM_TIMEOUT=${NAUTOBOT_NAPALM_TIMEOUT}
 # Directory where we'll install nautobot_config.py
 WORKDIR /opt/nautobot/
 
+RUN pip install --upgrade pip wheel
+
 # Copy our local nautobot_config.py file into the container
 COPY ./nautobot_config.py /opt/nautobot/nautobot_config.py
 
@@ -55,10 +35,9 @@ COPY ./nautobot_config.py /opt/nautobot/nautobot_config.py
 COPY ./requirements.txt /opt/nautobot/requirements.txt
 
 # Use pip to install any additional requirements.
-RUN pip install --no-cache-dir -r /opt/nautobot/requirements.txt
+RUN pip install --no-cache-dir --no-warn-script-location -r /opt/nautobot/requirements.txt
+
+EXPOSE 8080
 
 # Run Nautobot
 CMD ["nautobot-server", "runserver", "0.0.0.0:8080"]
-
-# Make sure the agent starts when the container is started
-# ENTRYPOINT ["amazon-ssm-agent", "start"]

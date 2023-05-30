@@ -25,6 +25,7 @@ export class NautobotVpcStack extends Stack {
     });
 
     nautobotSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
+    nautobotSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(8080), 'Allow HTTPS');
 
     this.nautobotSecurityGroup = nautobotSecurityGroup
 

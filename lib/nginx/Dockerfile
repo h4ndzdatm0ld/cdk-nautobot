@@ -1,5 +1,5 @@
 # Dockerfile for Nginx
-FROM nginx:stable
+FROM public.ecr.aws/docker/library/nginx:latest
 
 COPY ./nginx.conf /etc/nginx/nginx.conf
 
