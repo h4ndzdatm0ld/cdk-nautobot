@@ -23,6 +23,7 @@ export class NautobotFargateEcsStack extends Stack {
   constructor(
     scope: Construct,
     id: string,
+    stage: string,
     dockerStack: NautobotDockerImageStack,
     nginxStack: NginxDockerImageStack,
     secretsStack: NautobotSecretsStack,
@@ -36,12 +37,12 @@ export class NautobotFargateEcsStack extends Stack {
     const vpc = vpcStack.vpc;
     const alb = vpcStack.alb;
     const nautobotSecurityGroup = vpcStack.nautobotSecurityGroup;
-    const namespace: string = "nautobot-service.local";
+    const namespace: string = `${stage}.nautobot-service.local`;
 
-    const cluster = new Cluster(this, "NautobotCluster", {
+    const cluster = new Cluster(this, `${stage}NautobotCluster`, {
       containerInsights: true,
       vpc,
-      clusterName: "NautobotCluster",
+      clusterName: `${stage}NautobotCluster`,
     });
 
     cluster.addDefaultCloudMapNamespace({
@@ -49,8 +50,9 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     // Define a new IAM role for Fargate Task Definitions
-    const ecsTaskRole = new Role(this, "ECSTaskRole", {
+    const ecsTaskRole = new Role(this, `${stage}ECSTaskRole`, {
       assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com"),
+      roleName: `${stage}ECSTaskRole`,
     });
 
     // Attach the necessary managed policies
@@ -58,8 +60,9 @@ export class NautobotFargateEcsStack extends Stack {
     ecsTaskRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName("CloudWatchLogsFullAccess"));
 
     // Define a new IAM role for your Fargate Service Execution
-    const ecsExecutionRole = new Role(this, "ECSExecutionRole", {
+    const ecsExecutionRole = new Role(this, `${stage}ECSExecutionRole`, {
       assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com"),
+      roleName: `${stage}ECSExecutionRole`,
     });
 
     // Attach the necessary managed policies to your role
@@ -67,7 +70,7 @@ export class NautobotFargateEcsStack extends Stack {
     ecsExecutionRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName("CloudWatchLogsFullAccess"));
 
     // Nautobot Worker
-    const nautobotWorkerTaskDefinition = new FargateTaskDefinition(this, "NautobotWorkerTaskDefinition", {
+    const nautobotWorkerTaskDefinition = new FargateTaskDefinition(this, `${stage}NautobotWorkerTaskDefinition`, {
       memoryLimitMiB: 4096,
       cpu: 2048,
       taskRole: ecsTaskRole,
@@ -78,6 +81,12 @@ export class NautobotFargateEcsStack extends Stack {
       // Make sure to pass the database and Redis information to the Nautobot app.
       NAUTOBOT_DB_HOST: dbStack.postgresInstance.dbInstanceEndpointAddress,
       NAUTOBOT_REDIS_HOST: dbStack.redisCluster.attrRedisEndpointAddress,
+      NAUTOBOT_ALLOWED_HOSTS: "*",
+      NAUTOBOT_BANNER_TOP: "Local Production",
+      NAUTOBOT_LOG_LEVEL: "INFO",
+      NAUTOBOT_METRICS_ENABLED: "true",
+      NAUTOBOT_REDIS_PORT: "6379",
+      NAUTOBOT_NAPALM_TIMEOUT: "5"
     };
 
     // update secrets w/ DB PW
@@ -101,7 +110,7 @@ export class NautobotFargateEcsStack extends Stack {
       },
     });
 
-    const workerService = new FargateService(this, "NautobotWorkerService", {
+    const workerService = new FargateService(this, `${stage}NautobotWorkerService`, {
       cluster,
       serviceName: "NautobotWorkerService",
       enableExecuteCommand: true,
@@ -119,7 +128,7 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     // Nautobot Scheduler Task Definition and Service
-    const nautobotSchedulerTaskDefinition = new FargateTaskDefinition(this, "NautobotSchedulerTaskDefinition", {
+    const nautobotSchedulerTaskDefinition = new FargateTaskDefinition(this, `${stage}NautobotSchedulerTaskDefinition`, {
       memoryLimitMiB: 4096,
       cpu: 2048,
       taskRole: ecsTaskRole,
@@ -134,7 +143,7 @@ export class NautobotFargateEcsStack extends Stack {
       command: ["nautobot-server", "celery", "beat"],
     });
 
-    const schedulerService = new FargateService(this, "NautobotSchedulerService", {
+    const schedulerService = new FargateService(this, `${stage}NautobotSchedulerService`, {
       cluster,
       serviceName: "NautobotSchedulerService",
       enableExecuteCommand: true,
@@ -152,7 +161,7 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     // Nautobot App Task Definition and Service
-    const nautobotAppTaskDefinition = new FargateTaskDefinition(this, "NautobotAppTaskDefinition", {
+    const nautobotAppTaskDefinition = new FargateTaskDefinition(this, `${stage}NautobotAppTaskDefinition`, {
       memoryLimitMiB: 4096,
       cpu: 2048,
       taskRole: ecsTaskRole,
@@ -160,12 +169,13 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     const nautobotAppContainer = nautobotAppTaskDefinition.addContainer("nautobot", {
-      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+      // image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+      image: ecs.ContainerImage.fromRegistry('networktocode/nautobot:1.5-py3.9'),
       logging: LogDrivers.awsLogs({ streamPrefix: "NautobotApp" }),
       environment: environment, // Pass the environment variables to the container
       secrets: secretsStack.secrets,
       healthCheck: {
-        command: ["CMD-SHELL", "curl -f http://localhost/health/ || exit 1"],
+        command: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"],
         interval: Duration.seconds(30),
         timeout: Duration.seconds(10),
         startPeriod: Duration.seconds(60),
@@ -201,14 +211,13 @@ export class NautobotFargateEcsStack extends Stack {
       appProtocol: ecs.AppProtocol.http,
     });
 
-
-    const nautobotAppService = new FargateService(this, "NautobotAppService", {
+    const nautobotAppService = new FargateService(this, `${stage}NautobotAppService`, {
       circuitBreaker: { rollback: true },
       cluster,
       serviceName: "NautobotAppService",
       enableExecuteCommand: true,
       taskDefinition: nautobotAppTaskDefinition,
-      assignPublicIp: true,
+      assignPublicIp: false,
       desiredCount: 1,
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS,

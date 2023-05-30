@@ -26,16 +26,18 @@ ENV NAUTOBOT_NAPALM_TIMEOUT=${NAUTOBOT_NAPALM_TIMEOUT}
 # Directory where we'll install nautobot_config.py
 WORKDIR /opt/nautobot/
 
+RUN chmod 755 /opt/nautobot/
+
 RUN pip install --upgrade pip wheel
 
 # Copy our local nautobot_config.py file into the container
-COPY ./nautobot_config.py /opt/nautobot/nautobot_config.py
+COPY ./nautobot_config.py ${WORKDIR}/nautobot_config.py
 
 # Copy our local requirements.txt into the container
-COPY ./requirements.txt /opt/nautobot/requirements.txt
+COPY ./requirements.txt ${WORKDIR}/requirements.txt
 
 # Use pip to install any additional requirements.
-RUN pip install --no-cache-dir --no-warn-script-location -r /opt/nautobot/requirements.txt
+RUN pip install --no-cache-dir --no-warn-script-location -r ${WORKDIR}/requirements.txt
 
 EXPOSE 8080
 

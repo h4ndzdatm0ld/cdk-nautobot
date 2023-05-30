@@ -15,7 +15,7 @@ from nautobot.core.settings_funcs import is_truthy, parse_redis_connection
 # access to the server via any other hostnames. The first FQDN in the list will be treated as the preferred name.
 #
 # Example: ALLOWED_HOSTS = ['nautobot.example.com', 'nautobot.internal.local']
-ALLOWED_HOSTS = os.getenv("NAUTOBOT_ALLOWED_HOSTS", "").split(" ")
+ALLOWED_HOSTS = os.getenv("NAUTOBOT_ALLOWED_HOSTS", "localhost 127.0.0.1 *").split(" ")
 HIDE_RESTRICTED_UI = os.getenv("HIDE_RESTRICTED_UI", False)
 
 # Database configuration. See the Django documentation for a complete list of available parameters:
@@ -100,11 +100,11 @@ ALLOWED_URL_SCHEMES = (
 
 # Optionally display a persistent banner at the top and/or bottom of every page. HTML is allowed. To display the same
 # content in both banners, define BANNER_TOP and set BANNER_BOTTOM = BANNER_TOP.
-BANNER_TOP = os.getenv("NAUTOBOT_BANNER_TOP", "")
-BANNER_BOTTOM = os.getenv("NAUTOBOT_BANNER_BOTTOM", "")
+BANNER_TOP = os.getenv("NAUTOBOT_BANNER_TOP", "PRODUCTION")
+BANNER_BOTTOM = os.getenv("NAUTOBOT_BANNER_BOTTOM", "PRODUCTION")
 
 # Text to include on the login page above the login form. HTML is allowed.
-BANNER_LOGIN = os.getenv("NAUTOBOT_BANNER_LOGIN", "")
+BANNER_LOGIN = os.getenv("NAUTOBOT_BANNER_LOGIN", "Welcome to Nautobot")
 
 # Redis HIDE_RESTRICTED_UI = os.getenv("HIDE_RESTRICTED_UI", False)
 
