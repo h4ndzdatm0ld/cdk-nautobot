@@ -201,11 +201,6 @@ export class NautobotFargateEcsStack extends Stack {
       appProtocol: ecs.AppProtocol.http,
     });
 
-    // Wait until the Nautobot app container is healthy before starting the Nginx container
-    nginxContainer.addContainerDependencies({
-      container: nautobotAppContainer,
-      condition: ecs.ContainerDependencyCondition.HEALTHY
-    });
 
     const nautobotAppService = new FargateService(this, "NautobotAppService", {
       circuitBreaker: { rollback: true },
