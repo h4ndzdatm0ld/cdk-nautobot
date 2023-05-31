@@ -9,19 +9,19 @@ export class NautobotVpcStack extends Stack {
   public readonly vpc: Vpc;
   public readonly alb: ApplicationLoadBalancer;
   public readonly nautobotSecurityGroup: SecurityGroup;
-  constructor(scope: Construct, id: string, props?: StackProps) {
+  constructor(scope: Construct, id: string, stage: string, props?: StackProps) {
     super(scope, id, props);
 
-    const vpc = new Vpc(this, 'NautobotVpc', {
+    const vpc = new Vpc(this, `${stage}NautobotVpc`, {
       maxAzs: 3,
-      vpcName: 'NautobotVpc',
+      vpcName: `${stage}NautobotVpc`,
     });
     this.vpc = vpc
 
-    const nautobotSecurityGroup = new SecurityGroup(this, 'NautobotSecurityGroup', {
+    const nautobotSecurityGroup = new SecurityGroup(this, `${stage}NautobotSecurityGroup`, {
       vpc,
       allowAllOutbound: true,
-      securityGroupName: 'NautobotSecurityGroup',
+      securityGroupName: `${stage}NautobotSecurityGroup`,
     });
 
     nautobotSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allow HTTP');
@@ -29,10 +29,10 @@ export class NautobotVpcStack extends Stack {
 
     this.nautobotSecurityGroup = nautobotSecurityGroup
 
-    const alb = new ApplicationLoadBalancer(this, 'NautobotALB', {
+    const alb = new ApplicationLoadBalancer(this, `${stage}NautobotALB`, {
       vpc,
       internetFacing: true,
-      loadBalancerName: 'NautobotALB',
+      loadBalancerName: `${stage}NautobotALB`,
       securityGroup: this.nautobotSecurityGroup
     });
     this.alb = alb

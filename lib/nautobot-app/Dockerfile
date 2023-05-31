@@ -23,21 +23,22 @@ ENV NAUTOBOT_REDIS_PORT=${NAUTOBOT_REDIS_PORT}
 ARG NAUTOBOT_NAPALM_TIMEOUT
 ENV NAUTOBOT_NAPALM_TIMEOUT=${NAUTOBOT_NAPALM_TIMEOUT}
 
-# Directory where we'll install nautobot_config.py
-WORKDIR /opt/nautobot/
+ARG NAUTOBOT_ROOT=/opt/nautobot
+ENV NAUTOBOT_ROOT=${NAUTOBOT_ROOT}
 
-RUN chmod 755 /opt/nautobot/
+RUN chmod 755 ${NAUTOBOT_ROOT}
+
+# Copy our local nautobot_config.py file into the container
+COPY ./nautobot_config.py ${NAUTOBOT_ROOT}/nautobot_config.py
+
+# Copy our local requirements.txt into the container
+COPY ./requirements.txt ${NAUTOBOT_ROOT}/requirements.txt
+
+USER nautobot
 
 RUN pip install --upgrade pip wheel
 
-# Copy our local nautobot_config.py file into the container
-COPY ./nautobot_config.py ${WORKDIR}/nautobot_config.py
-
-# Copy our local requirements.txt into the container
-COPY ./requirements.txt ${WORKDIR}/requirements.txt
-
-# Use pip to install any additional requirements.
-RUN pip install --no-cache-dir --no-warn-script-location -r ${WORKDIR}/requirements.txt
+RUN pip install --no-cache-dir --no-warn-script-location -r ${NAUTOBOT_ROOT}/requirements.txt
 
 EXPOSE 8080
 

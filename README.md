@@ -20,20 +20,9 @@ ecs-session nautobot
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
-## Useful commands
-
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `cdk deploy`      deploy this stack to your default AWS account/region
-* `cdk diff`        compare deployed stack with current state
-* `cdk synth`       emits the synthesized CloudFormation template
-
 ## Project Structure
 
-This project is structured to use AWS CDK to build and deploy a Nautobot application using ECS Fargate, with its data stored in RDS PostgreSQL and cached in ElastiCache Redis.
-
-### File Descriptions
+This project is structured to use AWS CDK to build and deploy a Nautobot application using ECS Fargate, with its data stored in RDS PostgreSQL and cached in ElastiCache Redis split into multiple stacks.
 
 The following files and directories represent the core components of the application:
 
@@ -62,7 +51,7 @@ There are two `.env` in this project that are used for the Nautobot Application 
 
 ### CDK Bootstrap and Deploy
 
-Ensure that you have proper AWS credentials set up on your machine. Then, run the following commands:
+Ensure that you have proper AWS credentials set up on your machine via `./aws` credentials/profile. Then, run the following commands:
 
 Bootstrap CDK environment to your AWS account
 
@@ -70,10 +59,20 @@ Bootstrap CDK environment to your AWS account
 cdk bootstrap
 ```
 
-Deploy the stacks
+### Automated Deployment Script ==> `deploy.sh`
+
+This script allows you to deploy your stack in different environments or `stages`. It takes one command line argument, `--stage`, that specifies the deployment stage: either `dev` or `prod`.
+
+Depending on the provided stage, the script will pass it to the AWS CDK command `cdk deploy` as a context variable, which can be used in your CDK stack to customize resource configuration based on the deployment stage.
+
+Replace `dev` or `prod` with the stage you want to deploy to.
+
+> If you provide an unknown option or do not provide the --stage option, the script will print a help message and stop executing.
+
+Example (deploy to dev stage)
 
 ```bash
-cdk deploy --all
+./deploy.sh --stage=dev
 ```
 
 ## How to Destroy

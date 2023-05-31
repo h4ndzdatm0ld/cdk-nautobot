@@ -171,7 +171,7 @@ export class NautobotFargateEcsStack extends Stack {
     const nautobotAppContainer = nautobotAppTaskDefinition.addContainer("nautobot", {
       // image: ContainerImage.fromDockerImageAsset(dockerStack.image),
       image: ecs.ContainerImage.fromRegistry('networktocode/nautobot:1.5-py3.9'),
-      logging: LogDrivers.awsLogs({ streamPrefix: "NautobotApp" }),
+      logging: LogDrivers.awsLogs({ streamPrefix: `${stage}NautobotApp` }),
       environment: environment, // Pass the environment variables to the container
       secrets: secretsStack.secrets,
       healthCheck: {
@@ -193,7 +193,9 @@ export class NautobotFargateEcsStack extends Stack {
 
     const nginxContainer = nautobotAppTaskDefinition.addContainer("nginx", {
       image: ContainerImage.fromDockerImageAsset(nginxStack.image),
-      logging: LogDrivers.awsLogs({ streamPrefix: "Nginx" }),
+      logging: LogDrivers.awsLogs({
+        streamPrefix: `${stage}Nginx`
+      }),
       healthCheck: {
         command: ["CMD-SHELL", "nginx -t || exit 1"],
         interval: Duration.seconds(30),
@@ -214,7 +216,7 @@ export class NautobotFargateEcsStack extends Stack {
     const nautobotAppService = new FargateService(this, `${stage}NautobotAppService`, {
       circuitBreaker: { rollback: true },
       cluster,
-      serviceName: "NautobotAppService",
+      serviceName: `${stage}NautobotAppService`,
       enableExecuteCommand: true,
       taskDefinition: nautobotAppTaskDefinition,
       assignPublicIp: false,
@@ -248,13 +250,13 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     // Add necessary load balancer configuration
-    const listener = alb.addListener("Listener", {
+    const listener = alb.addListener(`${stage}Listener`, {
       port: 80,
       protocol: ApplicationProtocol.HTTP,
       // certificates: [] // Provide your SSL Certificates here if above is HTTP(S)
     });
 
-    listener.addTargets("NautobotAppService", {
+    listener.addTargets(`${stage}NautobotAppService`, {
       port: 80,
       targets: [nautobotAppService.loadBalancerTarget({ containerName: "nginx", containerPort: 80 })],
       healthCheck: {
