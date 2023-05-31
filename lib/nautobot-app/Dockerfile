@@ -40,7 +40,8 @@ RUN pip install --upgrade pip wheel
 
 RUN pip install --no-cache-dir --no-warn-script-location -r ${NAUTOBOT_ROOT}/requirements.txt
 
-EXPOSE 8080
+# Run Nautobot server under uwsgi by default
+EXPOSE 8080 8443
 
 # Run Nautobot
-CMD ["nautobot-server", "runserver", "0.0.0.0:8080"]
+CMD ["nautobot-server", "start", "--ini", "/opt/nautobot/uwsgi.ini"]

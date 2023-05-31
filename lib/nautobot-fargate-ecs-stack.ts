@@ -169,8 +169,9 @@ export class NautobotFargateEcsStack extends Stack {
     });
 
     const nautobotAppContainer = nautobotAppTaskDefinition.addContainer("nautobot", {
-      // image: ContainerImage.fromDockerImageAsset(dockerStack.image),
-      image: ecs.ContainerImage.fromRegistry('networktocode/nautobot:1.5-py3.9'),
+      image: ContainerImage.fromDockerImageAsset(dockerStack.image),
+      // If you want to use the official image, uncomment the line below and comment the line above.
+      // image: ecs.ContainerImage.fromRegistry('networktocode/nautobot:1.5-py3.9'),
       logging: LogDrivers.awsLogs({ streamPrefix: `${stage}NautobotApp` }),
       environment: environment, // Pass the environment variables to the container
       secrets: secretsStack.secrets,

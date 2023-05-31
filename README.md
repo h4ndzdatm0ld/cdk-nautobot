@@ -1,6 +1,16 @@
 # Nautobot AWS CDK Deployment
 
-This project contains the AWS CDK code to deploy Nautobot to AWS. The CDK code was influenced by the [Nautobot In AWS Fargate](https://blog.networktocode.com/post/nautobot-in-aws-fargate/) blog post by [Network to Code](https://www.networktocode.com/). However, the mentioned blog post is missing a lot of details about Redis and back end database (Postgres in this case). Other differences are the simplification of building the Docker images and ECR which allows for plugin installation and custom attributes to be set in the `nautobot_config.py` file for the Nautobot container and the use of AWS Secrets Manager to store secrets.
+This project contains the AWS CDK code to deploy a multi-environment (`dev` & `prod`) Nautobot to AWS ECS/Fargate behind an ALB. The CDK code was influenced by the [Nautobot In AWS Fargate](https://blog.networktocode.com/post/nautobot-in-aws-fargate/) blog post by [Network to Code](https://www.networktocode.com/) which provides a high-level deployment through the AWS Console. This project fills all the gaps and provides a fully automated deployment of Nautobot with CDK.
+
+## TLDR -> Quick Start
+
+1. Clone the repo
+2. Edit the `lib/secrets/env-example` and `lib/nautobot-app/.env-example` files and rename them to `.env`
+3. Manipulate the `lib/nautobot-app/nautobot_config.py` file to your liking.
+4. Run the `deploy.sh` script with the `--stage` option to deploy to `dev` or `prod` environment.
+5. ~ 20 minutes later and you have a `dev` and `prod` Nautobot instance running in AWS.
+
+> At this time SSL certs are not part of the deployment, but could be a simple change to the ALB and SGs.
 
 ## SSM - Accessing Containers
 

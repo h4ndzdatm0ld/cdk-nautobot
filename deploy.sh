@@ -35,4 +35,4 @@ fi
 
 echo "Deploying stage: $STAGE"
 
-cdk deploy --all --context stage=$STAGE
+cdk deploy --all --context stage=$STAGE --require-approval never
