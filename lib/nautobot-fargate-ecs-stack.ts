@@ -81,12 +81,6 @@ export class NautobotFargateEcsStack extends Stack {
       // Make sure to pass the database and Redis information to the Nautobot app.
       NAUTOBOT_DB_HOST: dbStack.postgresInstance.dbInstanceEndpointAddress,
       NAUTOBOT_REDIS_HOST: dbStack.redisCluster.attrRedisEndpointAddress,
-      NAUTOBOT_ALLOWED_HOSTS: "*",
-      NAUTOBOT_BANNER_TOP: "Local Production",
-      NAUTOBOT_LOG_LEVEL: "INFO",
-      NAUTOBOT_METRICS_ENABLED: "true",
-      NAUTOBOT_REDIS_PORT: "6379",
-      NAUTOBOT_NAPALM_TIMEOUT: "5"
     };
 
     // update secrets w/ DB PW
