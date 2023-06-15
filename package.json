@@ -1,0 +1,39 @@
+{
+  "name": "cdk-nautobot",
+  "version": "0.1.0",
+  "bin": {
+    "cdk-nautobot": "bin/cdk-nautobot.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^8.2.0",
+    "@types/jest": "^29.4.0",
+    "@types/node": "18.14.6",
+    "aws-cdk": "2.78.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.0.5",
+    "ts-node": "^10.9.1",
+    "typescript": "~4.9.5"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-ec2": "^1.200.0",
+    "@aws-cdk/aws-ecs": "^1.200.0",
+    "@aws-cdk/aws-ecs-patterns": "^1.200.0",
+    "@aws-cdk/aws-elasticache": "^1.200.0",
+    "@aws-cdk/aws-elasticloadbalancingv2": "^1.200.0",
+    "@aws-cdk/aws-rds": "^1.200.0",
+    "@aws-cdk/aws-route53": "^1.200.0",
+    "@aws-cdk/aws-s3-assets": "^1.200.0",
+    "@aws-sdk/client-sts": "^3.341.0",
+    "aws-cdk-lib": "^2.78.0",
+    "aws-sdk": "^2.1386.0",
+    "constructs": "^10.2.32",
+    "dotenv": "^16.0.3",
+    "source-map-support": "^0.5.21"
+  }
+}
